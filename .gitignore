@@ -39,3 +39,5 @@ nohup.out
 
 # Local editor/development history
 .history/
+.aider.chat.history.md
+.aider.input.history
