@@ -1,0 +1,27 @@
+################################################################################
+#           Medusa fuzz configuration – global invariants                      #
+################################################################################
+contracts:
+  - path: medusa/MedusaHarness.sol:MedusaHarness
+
+proxies:
+  - contract: MedusaHarness
+    functions:
+      - fuzzSetSeasonUnlock(uint256)
+      - fuzzSetSeasonConfig(uint256,uint40,uint40,uint16,uint16,uint16,uint256)
+      - fuzzDeposit(uint256)
+      - fuzzStartRefund(uint256)
+      - fuzzPause()
+      - fuzzUnpause()
+      - fuzzScheduleWithdraw(uint256)
+      - fuzzExecuteWithdraw()
+      - fuzzToggleDelegation(address,address,bool)
+      - fuzzWarp(uint32)
+      - fuzzClaimNormal(address,uint256,uint256,uint256)
+      - fuzzClaimEarly(address,uint256,uint256,uint256)
+
+targets:
+  - id: protocol_invariants
+    contract: MedusaHarness
+    selector: "checkInvariants()"
+    property: { kind: assert }
