@@ -2,21 +2,17 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.26;
 
-// --- FOUNDRY IMPORTS ---
 import {Test} from "forge-std/Test.sol";
 import "forge-std/console.sol";
 
-// --- PROTOCOL IMPORTS ---
 import {BUILDFactory} from "src/BUILDFactory.sol";
 import {BUILDClaim} from "src/BUILDClaim.sol";
 import {IBUILDFactory} from "src/interfaces/IBUILDFactory.sol";
 import {IBUILDClaim} from "src/interfaces/IBUILDClaim.sol";
-
-// --- DEPENDENCY IMPORTS ---
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import {IDelegateRegistry} from "@delegatexyz/delegate-registry/v2.0/src/IDelegateRegistry.sol";
 
-// --- HELPER CONTRACT 1: A MINTABLE TOKEN ---
+// Helper contracts are included for self-containment
 contract MintableERC20 is ERC20 {
     constructor() ERC20("Mock Token", "MTK") {}
     function mint(address to, uint256 amount) public {
@@ -24,7 +20,6 @@ contract MintableERC20 is ERC20 {
     }
 }
 
-// --- HELPER CONTRACT 2: A MINIMAL DELEGATE REGISTRY STUB ---
 contract StubRegistry {
     function checkDelegateForContract(
         address,
@@ -43,7 +38,7 @@ contract ProofOfConceptOverflow is Test {
 
     address public factoryAdmin = makeAddr("factoryAdmin");
     address public projectAdmin = makeAddr("projectAdmin");
-    address public attacker = makeAddr("attacker");
+    address public user = makeAddr("user");
     uint32 public constant SEASON_ID = 1;
 
     function setUp() public {
@@ -78,7 +73,6 @@ contract ProofOfConceptOverflow is Test {
         );
 
         // --- 1. SETUP: A user is allocated a very large number of tokens ---
-        // This value is within uint256 but will cause issues with internal uint248 calculations.
         uint256 allocation = type(uint248).max;
         token.mint(projectAdmin, allocation);
         vm.startPrank(projectAdmin);
@@ -88,7 +82,7 @@ contract ProofOfConceptOverflow is Test {
 
         // --- 2. CONFIGURE SEASON ---
         bytes32 leaf = keccak256(
-            bytes.concat(keccak256(abi.encode(attacker, allocation, true, 0)))
+            bytes.concat(keccak256(abi.encode(user, allocation, true, 0)))
         );
 
         vm.startPrank(factoryAdmin);
@@ -101,7 +95,7 @@ contract ProofOfConceptOverflow is Test {
                 seasonId: SEASON_ID,
                 config: IBUILDFactory.ProjectSeasonConfig({
                     tokenAmount: allocation,
-                    baseTokenClaimBps: 1000, // 10% base
+                    baseTokenClaimBps: 1000,
                     unlockDelay: 0,
                     unlockDuration: 10 minutes,
                     merkleRoot: leaf,
@@ -118,7 +112,7 @@ contract ProofOfConceptOverflow is Test {
 
         // --- 3. EXPLOIT: USER ATTEMPTS TO CLAIM ---
         console.log(
-            "\n--- Phase 1: User with large allocation attempts an early claim ---"
+            "\n--- Phase 1: User with large allocation attempts to claim during vesting ---"
         );
         vm.warp(unlockStartsAt + 5 minutes); // Halfway through vesting
 
@@ -132,17 +126,17 @@ contract ProofOfConceptOverflow is Test {
             isEarlyClaim: true
         });
 
-        vm.prank(attacker);
+        vm.prank(user);
 
         // --- 4. EXPLOIT CONFIRMATION ---
         // The call to claim() will revert with an arithmetic overflow. This happens inside
-        // _getClaimableState when calculating the vested amounts with very large numbers.
+        // _getClaimableState when calculating `(bonus * elapsed) / duration`.
         // Because this is the only function to access funds, the user is permanently
         // blocked from ever receiving their allocation.
         vm.expectRevert(
             bytes("panic: arithmetic underflow or overflow (0x11)")
         );
-        claimContract.claim(attacker, claimParams);
+        claimContract.claim(user, claimParams);
 
         console.log(
             "\nSUCCESS: PoC confirmed. The claim transaction reverted with an arithmetic panic."
