@@ -1,4 +1,4 @@
-// File: test/PoC.t.sol
+// File: test/PoCIncompleteStateCleanup.t.sol
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.26;
 
@@ -30,7 +30,7 @@ contract StubRegistry {
     }
 }
 
-contract ProofOfConcept is Test {
+contract PoCIncompleteStateCleanup is Test {
     BUILDFactory public factory;
     MintableERC20 public token;
     StubRegistry public stubRegistry;
