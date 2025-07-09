@@ -24,7 +24,7 @@ contract MintableERC20 is ERC20DecimalsMock {
     }
 }
 
-contract PoCEchidnaRefundAccounting is Test {
+contract EchidnaRefundAccounting is Test {
     // --- State Variables ---
     BUILDFactory internal factory;
     MintableERC20 internal token;
