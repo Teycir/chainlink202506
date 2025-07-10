@@ -18,10 +18,10 @@ contract MintableERC20 is ERC20 {
 }
 
 /**
- * @title AdvancedFuzzer
+ * @title EchidnaAdvancedFuzz
  * @dev Implements the recommendations from the Echidna report to find complex accounting bugs.
  */
-contract AdvancedFuzzer is Test {
+contract EchidnaAdvancedFuzz is Test {
     // --- Contracts ---
     BUILDFactory internal factory;
     BUILDClaim internal claimContract;
