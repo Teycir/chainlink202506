@@ -1,0 +1,4 @@
+# Increase gas limit for deployment to handle complex constructors
+deploymentGas: 20000000
+# Set a reasonable test limit
+testLimit: 50000
