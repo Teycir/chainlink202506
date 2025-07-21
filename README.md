@@ -1,3 +1,9 @@
+## My contributions:
+
+- Reports here /home/teycir/Repos/2025-06-chainlink/Reports
+- PoC + Echidna fuzzers here /home/teycir/Repos/2025-06-chainlink/test
+  
+---
 # Chainlink Rewards audit details
 - Total Prize Pool: $200,000 in USDC
   - HM awards: up to $185,000 in USDC
