@@ -27,8 +27,8 @@ contract PoCPauseBypass is BaseTest {
             PROJECT_ADMIN,
             withdrawalAmount
         );
-
         // --- 2. Pause the contract ---
+        //
         _changePrank(ADMIN);
         s_factory.grantRole(s_factory.PAUSER_ROLE(), pauser);
         _changePrank(pauser);
